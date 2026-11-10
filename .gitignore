@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Runtime state: never commit OAuth tokens, health snapshots, databases, or logs
+data/
+runtime/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Local editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
