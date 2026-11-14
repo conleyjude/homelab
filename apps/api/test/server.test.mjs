@@ -36,7 +36,8 @@ async function withServer(run, { dashboardDirectory } = {}) {
     async refresh(period) { calls.push(['refresh', period]); return { data: {} }; },
     async disconnect() { calls.push(['disconnect']); return { revoked: false, attempted: true }; },
   };
-  const server = createApiServer({ service, config: { dashboardOrigin: 'http://localhost:4001' }, dashboardDirectory });
+  const weatherService = { async snapshot(options) { calls.push(['weather', options.refresh]); return { location: 'Home' }; } };
+  const server = createApiServer({ service, weatherService, config: { dashboardOrigin: 'http://localhost:4001' }, dashboardDirectory });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   try { await run(`http://127.0.0.1:${address.port}`, calls); }
@@ -49,7 +50,7 @@ test('public tunnel host can reach only the exact OAuth callback endpoint', asyn
     assert.equal(callback.status, 303);
     assert.equal(callback.headers.location, 'http://localhost:4001/?whoop=denied');
 
-    for (const path of ['/', '/assets/app.js', '/healthz', '/api/whoop/status', '/api/whoop/snapshot?period=morning', '/oauth/other']) {
+    for (const path of ['/', '/assets/app.js', '/healthz', '/api/whoop/status', '/api/whoop/snapshot?period=morning', '/api/weather/snapshot', '/oauth/other']) {
       const response = await sendWithHost(base, path, 'connect.surviveness.com');
       assert.equal(response.status, 404);
     }
@@ -67,6 +68,13 @@ test('local dashboard API works, while untrusted hosts and origins cannot access
     const localStatus = await sendWithHost(base, '/api/whoop/status', 'localhost:4001', { origin: 'http://localhost:4001' });
     assert.equal(localStatus.status, 200);
     assert.equal(localStatus.headers['access-control-allow-origin'], 'http://localhost:4001');
+    const weather = await sendWithHost(base, '/api/weather/snapshot?refresh=1', 'localhost:4001', { origin: 'http://localhost:4001' });
+    assert.equal(weather.status, 200);
+    assert.deepEqual(JSON.parse(weather.body), { snapshot: { location: 'Home' } });
+    assert.equal(weather.headers['access-control-allow-origin'], 'http://localhost:4001');
+    assert.deepEqual(calls.at(-1), ['weather', true]);
+    const rejectedWeatherOrigin = await sendWithHost(base, '/api/weather/snapshot', 'localhost:4001', { origin: 'https://attacker.example' });
+    assert.equal(rejectedWeatherOrigin.status, 403);
     const preflight = await sendWithHost(base, '/api/whoop/connect', 'localhost:4001', { method: 'OPTIONS', origin: 'http://localhost:4001' });
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers['access-control-allow-methods'], 'GET, POST');
