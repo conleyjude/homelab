@@ -1,5 +1,5 @@
 # Local API
 
-The local backend for the dashboard. It owns provider OAuth callbacks, API requests, token and temporary snapshot storage, and refresh or cleanup scheduling. The planned WHOOP callback is `/oauth/whoop/callback`; the process is intended to listen on port `4001` on the Pi.
+Node.js 22 API process used by the locally attached kiosk browser. It listens on port `4001`, published on Pi loopback only. It owns the WHOOP OAuth callback, encrypted token file, WHOOP v2 calls, and in-memory snapshot cleanup. Only the exact public callback route is accepted through `connect.surviveness.com`; dashboard routes require a loopback Host.
 
-Do not expose dashboard or health-data endpoints through the public tunnel. No server implementation exists yet.
+The API uses Node built-ins only. Start it with `npm start` from this directory after setting the local environment values described in the root [README](../../README.md).

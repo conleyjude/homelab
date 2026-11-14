@@ -1,5 +1,5 @@
 # Raspberry Pi deployment
 
-The planned deployment uses local system services on the Pi, alongside the existing nginx and Cloudflare Tunnel setup. Keep service and proxy examples here; do not commit live tunnel credentials or machine-specific secrets.
+The dashboard is static content served by the existing host nginx to Chromium on the physically attached touchscreen. Docker Compose runs only the Node API and publishes port `4001` on `127.0.0.1`. The existing cloudflared host service continues routing `connect.surviveness.com` to that API; the application accepts only the exact callback path on that Host.
 
-The API callback hostname is intended to route to port `4001`. The health-data dashboard and API routes should remain local-only. Deployment configuration does not exist yet.
+No live secrets, tokens, tunnel credentials, or health data belong in this repository. Follow the root [README](../../README.md) for host setup and configuration. This directory contains the API-only Compose file.

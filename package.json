@@ -1,0 +1,11 @@
+{
+  "name": "homelab-dashboard",
+  "private": true,
+  "scripts": {
+    "test": "node --test integrations/whoop/server/*.test.mjs apps/api/test/*.test.mjs",
+    "build": "npm --prefix apps/dashboard run build"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
