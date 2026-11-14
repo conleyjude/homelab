@@ -29,7 +29,7 @@ WHOOP OAuth redirect
 - `packages/dashboard-contracts/` is for shared response shapes only when needed. Avoid normalizing distinct provider scores into misleading interchangeable values.
 - `devices/` and future providers can be added independently without becoming separate running services by default.
 
-The dashboard is a static Vite/React build served by the Pi's existing host nginx to the locally attached kiosk browser. The Node.js 22 API is the only container in the initial Compose deployment. It binds inside its container on `0.0.0.0:4001`, while Docker publishes that port only on host loopback `127.0.0.1:4001`. The kiosk browser calls the loopback API directly; the API allows CORS only from one configured exact dashboard origin. No additional nginx API proxy or networked display client is required. The existing host cloudflared service stays in place and routes the `connect.surviveness.com` callback hostname directly to `localhost:4001`.
+The dashboard is a static Vite/React build served by the Node.js 22 API container to the locally attached kiosk browser. This is the only container in the initial Compose deployment. It binds inside its container on `0.0.0.0:4001`, while Docker publishes that port only on host loopback `127.0.0.1:4001`. The kiosk opens `http://localhost:4001`, so page and local API share an origin. No nginx document root, additional nginx API proxy, or networked display client is required. The existing host nginx and cloudflared service stay in place; cloudflared routes the `connect.surviveness.com` callback hostname directly to `localhost:4001`.
 
 ## WHOOP authorization and permissions
 
@@ -61,7 +61,7 @@ OAuth tokens are stored as an AES-256-GCM authenticated-encryption envelope with
 
 The dashboard and its health-data API are intended for local access on the home network, not public internet access. The WHOOP OAuth callback is a necessary exception: Cloudflare Tunnel exposes the specific callback hostname and forwards it to the Pi API. Cloudflare is therefore part of the callback/network path and may process request and connection metadata. The callback carries OAuth authorization information; the Pi API makes separate HTTPS requests to WHOOP for health data.
 
-The API checks the request Host before routing. `connect.surviveness.com` is accepted only for `GET /oauth/whoop/callback`; every other public-host request, including `/healthz`, is denied. Dashboard API and health routes accept only `localhost` or `127.0.0.1`. State-changing local routes require the exact configured dashboard Origin, and browser CORS responses are granted only to that same origin. The API has no request logging. Ensure Cloudflare Access does not block the provider callback and verify Cloudflare/Tunnel logs do not retain authorization codes or state query values.
+The API checks the request Host before routing. `connect.surviveness.com` is accepted only for `GET /oauth/whoop/callback`; every other public-host request, including dashboard assets and `/healthz`, is denied. Dashboard assets, API, and health routes accept only `localhost` or `127.0.0.1`. State-changing local API routes require the exact configured dashboard Origin. The API has no request logging. Ensure Cloudflare Access does not block the provider callback and verify Cloudflare/Tunnel logs do not retain authorization codes or state query values.
 
 ## Disconnect and deletion
 
@@ -72,7 +72,7 @@ Provide a local disconnect/reset action. It should attempt to revoke the WHOOP a
 Before using real WHOOP health data, implement and verify:
 
 1. Review the current WHOOP developer/API terms for local personal dashboard use and permitted cache duration. Verify actual authenticated API cache headers before setting `WHOOP_CACHE_MAX_SECONDS` above zero. Until then server snapshot retention stays disabled.
-2. Verify Cloudflare/Tunnel logging/retention does not capture callback authorization-code/state query parameters. The API does not log requests; the existing nginx serves static assets only and needs no API proxy changes.
+2. Verify Cloudflare/Tunnel logging/retention does not capture callback authorization-code/state query parameters. The API does not log requests; host nginx configuration is not changed by this deployment.
 3. Configure and test the registered callback against the running Pi with a WHOOP Sandbox account, approve exactly the four requested data scopes, and verify whether `offline` produced a refresh token. Tests use synthetic responses and cannot verify Sandbox behavior.
 4. Configure `/etc/homelab/whoop.env` with actual client values and a unique root-only encryption key; ensure `/var/lib/homelab/whoop` is writable only by the container's service UID. Confirm host backups protect the key and token volume.
 5. Add accurate privacy/contact text wherever the dashboard is publicly discoverable. Keep the dashboard and API data routes local-only; keep the existing public tunnel hostname limited to the exact callback path at the application boundary.

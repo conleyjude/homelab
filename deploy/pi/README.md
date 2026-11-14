@@ -1,5 +1,7 @@
 # Raspberry Pi deployment
 
-The dashboard is static content served by the existing host nginx to Chromium on the physically attached touchscreen. Docker Compose runs only the Node API and publishes port `4001` on `127.0.0.1`. The existing cloudflared host service continues routing `connect.surviveness.com` to that API; the application accepts only the exact callback path on that Host.
+The Node API container also serves the compiled dashboard to Chromium on the physically attached touchscreen at `http://localhost:4001`. Docker Compose publishes port `4001` on `127.0.0.1`. No nginx document root or nginx change is needed. The existing cloudflared host service continues routing `connect.surviveness.com` to that API; the application accepts only the exact callback path on that Host.
 
 No live secrets, tokens, tunnel credentials, or health data belong in this repository. Follow the root [README](../../README.md) for host setup and configuration. This directory contains the API-only Compose file.
+
+From Windows, [deploy-to-pi.ps1](deploy-to-pi.ps1) transfers the API, dashboard source, Dockerfile, and Compose file over SSH/SCP, then runs Compose to build and start the image. The SSH target defaults to `ubuntu@192.168.0.71`; override it with `-PiTarget user@host` if needed. The script checks for Docker Compose and `/etc/homelab/whoop.env`, and prepares `/var/lib/homelab/whoop` for the API container. Use `-WhatIf` to preview the target. It never transfers `.env` or changes nginx/Cloudflare configuration.

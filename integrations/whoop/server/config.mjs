@@ -16,7 +16,7 @@ export function createConfig(env = process.env) {
     throw new Error('WHOOP_CACHE_MAX_SECONDS must be a non-negative integer');
   }
 
-  const dashboardUrl = new URL(env.DASHBOARD_ORIGIN ?? 'http://localhost/');
+  const dashboardUrl = new URL(env.DASHBOARD_ORIGIN ?? 'http://localhost:4001/');
   if (!['http:', 'https:'].includes(dashboardUrl.protocol) || dashboardUrl.username || dashboardUrl.password
     || dashboardUrl.pathname !== '/' || dashboardUrl.search || dashboardUrl.hash) {
     throw new Error('DASHBOARD_ORIGIN must be one exact HTTP(S) origin without path, credentials, query, or fragment');

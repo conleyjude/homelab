@@ -1,9 +1,23 @@
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { WhoopError } from '../../../integrations/whoop/server/whoop-client.mjs';
 
 const PUBLIC_HOST = 'connect.surviveness.com';
 const CALLBACK_PATH = '/oauth/whoop/callback';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const CONTENT_TYPES = new Map([
+  ['.css', 'text/css; charset=utf-8'],
+  ['.html', 'text/html; charset=utf-8'],
+  ['.ico', 'image/x-icon'],
+  ['.js', 'text/javascript; charset=utf-8'],
+  ['.mjs', 'text/javascript; charset=utf-8'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml'],
+  ['.webp', 'image/webp'],
+  ['.woff', 'font/woff'],
+  ['.woff2', 'font/woff2'],
+]);
 
 function requestHost(request) {
   const host = request.headers.host;
@@ -49,7 +63,41 @@ async function readJson(request) {
   try { return JSON.parse(text); } catch { throw new Error('invalid_json'); }
 }
 
-export function createApiServer({ service, config }) {
+async function serveDashboardFile(directory, pathname, method, response) {
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    response.writeHead(400, { 'cache-control': 'no-store' });
+    response.end();
+    return;
+  }
+
+  const filePath = resolve(directory, `.${decodedPath === '/' ? '/index.html' : decodedPath}`);
+  const relativePath = relative(directory, filePath);
+  if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+    response.writeHead(404, { 'cache-control': 'no-store' });
+    response.end();
+    return;
+  }
+
+  try {
+    const body = await readFile(filePath);
+    const extension = extname(filePath).toLowerCase();
+    response.writeHead(200, {
+      'content-type': CONTENT_TYPES.get(extension) ?? 'application/octet-stream',
+      'cache-control': relativePath === 'index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+      'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    response.end(method === 'HEAD' ? undefined : body);
+  } catch (error) {
+    response.writeHead(error.code === 'ENOENT' ? 404 : 500, { 'cache-control': 'no-store' });
+    response.end();
+  }
+}
+
+export function createApiServer({ service, config, dashboardDirectory }) {
   return createServer(async (request, response) => {
     const host = requestHost(request);
     const url = new URL(request.url ?? '/', 'http://localhost');
@@ -124,6 +172,10 @@ export function createApiServer({ service, config }) {
           json(response, 200, await service.disconnect(), allowedOrigin);
           return;
         }
+      }
+      if (dashboardDirectory && ['GET', 'HEAD'].includes(request.method)) {
+        await serveDashboardFile(dashboardDirectory, url.pathname, request.method, response);
+        return;
       }
       json(response, 404, { error: 'not_found' }, allowedOrigin);
     } catch (error) {

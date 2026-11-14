@@ -4,10 +4,10 @@ A single-user WHOOP v2 dashboard for a kiosk browser on the Raspberry Pi touchsc
 
 ## Layout and implementation
 
-- `apps/dashboard/` is a Vite/React static dashboard. The WHOOP panel is kept in `integrations/whoop/dashboard/` and consumes only the local API.
-- `apps/api/` is a dependency-free Node.js 22 API. It publishes only on loopback on the Pi and owns OAuth, encrypted token storage, data retrieval, and cleanup.
+- `apps/dashboard/` is a Vite/React dashboard. The WHOOP panel is kept in `integrations/whoop/dashboard/` and consumes only the local API.
+- `apps/api/` is a dependency-free Node.js 22 API that also serves the built dashboard on the Pi's loopback port. It owns OAuth, encrypted token storage, data retrieval, and cleanup.
 - `integrations/whoop/server/` contains the WHOOP v2 client, OAuth state, data mapping, encrypted token store, and in-memory snapshot cache.
-- `deploy/pi/compose.yaml` runs the API as the only container. Host nginx continues serving the static dashboard; host cloudflared is unchanged.
+- `deploy/pi/compose.yaml` runs the API and its dashboard as the only container. Host nginx and cloudflared remain unchanged.
 - `docs/architecture.md` describes data flow, retention, and remaining go-live checks.
 
 ## Local development
@@ -21,7 +21,7 @@ npm run build
 npm --prefix apps/dashboard run dev
 ```
 
-The Vite development server listens on `http://127.0.0.1:5173`; the browser calls the API directly at `http://localhost:4001` with an exact-origin CORS check. To run the API locally, set the process environment variables using `.env.example` as a reference, then run:
+The Vite development server listens on `http://127.0.0.1:5173`; it calls the API at `http://localhost:4001`, which allows that exact development origin. In the Pi image, the API serves the compiled dashboard and local API on one origin at `http://localhost:4001`. To run the API locally, set the process environment variables using `.env.example` as a reference, then run:
 
 ```powershell
 $env:WHOOP_CLIENT_ID = 'fake-local-client-id'
@@ -43,11 +43,11 @@ WHOOP_CLIENT_ID=your-WHOOP-Developer-Dashboard-client-id
 WHOOP_CLIENT_SECRET=your-WHOOP-Developer-Dashboard-client-secret
 WHOOP_TOKEN_ENCRYPTION_KEY=base64-output-from-openssl-rand-32-bytes
 PI_TIMEZONE=your-Pi-IANA-timezone
-DASHBOARD_ORIGIN=http://localhost
+DASHBOARD_ORIGIN=http://localhost:4001
 WHOOP_CACHE_MAX_SECONDS=0
 ```
 
-Generate a unique 32-byte encryption key on the Pi with `openssl rand -base64 32` and enter its output in that file. Do not use the example key. `DASHBOARD_ORIGIN` must be the exact origin opened by the kiosk, with no trailing path; change it if the local nginx kiosk URL differs. `PI_TIMEZONE` should match the Pi's local IANA zone. Keep `WHOOP_CACHE_MAX_SECONDS=0` until the WHOOP developer/data terms and authenticated response cache headers have been reviewed. Zero disables server-side snapshot retention; snapshots are still displayed in the current browser session and are cleared there at the display boundary.
+Generate a unique 32-byte encryption key on the Pi with `openssl rand -base64 32` and enter its output in that file. Do not use the example key. Keep `DASHBOARD_ORIGIN=http://localhost:4001` for the kiosk page served by the API container. `PI_TIMEZONE` should match the Pi's local IANA zone. Keep `WHOOP_CACHE_MAX_SECONDS=0` until the WHOOP developer/data terms and authenticated response cache headers have been reviewed. Zero disables server-side snapshot retention; snapshots are still displayed in the current browser session and are cleared there at the display boundary.
 
 The encrypted token file is stored separately at `/var/lib/homelab/whoop/tokens.enc`. The encryption key lives only in the root-readable env file, not in Git, the image, or the token volume. Example setup commands:
 
@@ -62,7 +62,17 @@ Root and anyone able to inspect the Docker daemon can still access the key or pr
 
 ## Pi build and run
 
-Build the static dashboard and publish `apps/dashboard/dist/` under the existing host nginx document root. Keep the existing website, nginx configuration, and cloudflared service unchanged. The display is attached directly to the Pi; Chromium kiosk runs locally and opens the existing local dashboard URL (for example `http://localhost/`). The dashboard calls `http://localhost:4001` directly. Set `DASHBOARD_ORIGIN` to the exact origin opened by the kiosk. No nginx API proxy or remote display client is required. The panel resolution is not specified yet; the compact landscape layout is tuned for an assumed 800x480 viewport and remains responsive at narrower or portrait sizes.
+Keep the existing website, nginx configuration, and cloudflared service unchanged. The display is attached directly to the Pi; Chromium kiosk runs locally and opens `http://localhost:4001`, where the API container serves the dashboard and its API. No nginx document root or additional nginx route is needed. The panel resolution is not specified yet; the compact landscape layout is tuned for an assumed 800x480 viewport and remains responsive at narrower or portrait sizes.
+
+From Windows, deploy the current working tree from the repository root with OpenSSH (`ssh`, `scp`) and `tar` available:
+
+```powershell
+.\deploy\pi\deploy-to-pi.ps1
+```
+
+The SSH target defaults to `ubuntu@192.168.0.71` and can be overridden with `-PiTarget user@host`. The script stages only runtime source and configuration, transfers it over SSH/SCP, then runs Compose on the Pi. The multi-stage Dockerfile builds the Vite dashboard into the API image. It checks `/etc/homelab/whoop.env` and Docker Compose, prepares `/var/lib/homelab/whoop` for container UID/GID 1000, starts the API/dashboard container, and checks `/healthz`. The remote repository copy is placed at `~/homelab` by default; change `-RemoteRepoName` to use another simple directory name. SSH may prompt for the Pi account password or key passphrase, and remote `sudo` may prompt for the Pi sudo password. Use `-WhatIf` to preview the target without building or connecting.
+
+The script does not copy `.env`, credentials, encryption keys, `node_modules`, or health data. It does not install Docker, edit nginx, or change Cloudflare Tunnel configuration.
 
 From the repository on the Pi:
 
@@ -75,7 +85,7 @@ curl -fsS http://127.0.0.1:4001/healthz
 
 Compose binds host port `4001` to `127.0.0.1`, uses a read-only container filesystem, drops Linux capabilities, and persists only the encrypted token file. Docker must be installed on the Pi by its operator; this task did not install it or deploy to the live host.
 
-The registered OAuth redirect is exactly `https://connect.surviveness.com/oauth/whoop/callback`. Keep the existing cloudflared tunnel service and route for `connect.surviveness.com` to `http://localhost:4001`. The API accepts that public Host only for `GET /oauth/whoop/callback`; every other path on that Host is denied. Do not add an API route for the public website or tunnel. The callback query contains a short-lived authorization code and state; the API does not log requests, but verify Cloudflare/Tunnel logging and retention do not capture callback query strings.
+The registered OAuth redirect is exactly `https://connect.surviveness.com/oauth/whoop/callback`. Keep the existing cloudflared tunnel service and route for `connect.surviveness.com` to `http://localhost:4001`. The API accepts that public Host only for `GET /oauth/whoop/callback`; dashboard assets, health, and data routes on that Host are denied. Do not add an API route for the public website or tunnel. The callback query contains a short-lived authorization code and state; the API does not log requests, but verify Cloudflare/Tunnel logging and retention do not capture callback query strings.
 
 ## Tests and operational behavior
 
@@ -87,7 +97,7 @@ WHOOP's public member Terms of Use were not enough to establish the developer AP
 
 ## Troubleshooting
 
-- `reconnect_required`: WHOOP did not grant `offline`, the refresh token expired/was rotated elsewhere, or refresh failed. Use Connect/Reconnect and approve all four data permissions.
+- `reconnect_required`: WHOOP did not grant `offline`, the refresh token expired/was rotated elsewhere, or refresh failed. If the access token is still valid, manual refresh remains available; reconnect before it expires to continue unattended access. Approve all four data permissions.
 - `permission_denied`: compare scopes in the WHOOP Developer Dashboard with the four requested data scopes; no profile or workout permission is requested.
 - `rate_limited`: wait for the displayed retry window; do not automate retries.
 - Callback returns to the dashboard with an error: confirm the registered redirect URI exactly matches the one above and the existing tunnel routes the callback Host to port 4001.

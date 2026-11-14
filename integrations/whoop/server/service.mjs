@@ -88,12 +88,13 @@ export class WhoopService {
 
   async status() {
     const tokens = await this.tokenStore.read();
-    if (!tokens) return { connection: 'disconnected', scopes: [] };
+    if (!tokens) return { connection: 'disconnected', canFetch: false, scopes: [] };
     const canRefresh = Boolean(tokens.refreshToken);
+    const hasValidAccessToken = tokens.expiresAt > this.now() + 30000;
     if (this.#reconnectRequired || !canRefresh) {
-      return { connection: 'reconnect_required', scopes: tokens.scopes ?? [] };
+      return { connection: 'reconnect_required', canFetch: hasValidAccessToken || canRefresh, scopes: tokens.scopes ?? [] };
     }
-    return { connection: 'connected', scopes: tokens.scopes ?? [] };
+    return { connection: 'connected', canFetch: true, scopes: tokens.scopes ?? [] };
   }
 
   snapshot(period) {

@@ -112,6 +112,7 @@ const errorText = (error) => {
 export default function WhoopDashboard() {
   const [period, setPeriod] = useState(initialPeriod);
   const [connection, setConnection] = useState('loading');
+  const [canFetch, setCanFetch] = useState(false);
   const [snapshots, setSnapshots] = useState({ morning: null, evening: null });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -135,9 +136,13 @@ export default function WhoopDashboard() {
     Promise.all([getConnectionStatus(), getSnapshot('morning'), getSnapshot('evening')])
       .then(([status, morning, evening]) => {
         setConnection(status.connection);
+        setCanFetch(Boolean(status.canFetch));
         setSnapshots({ morning: morning.snapshot, evening: evening.snapshot });
       })
-      .catch(() => setConnection('unavailable'));
+      .catch(() => {
+        setConnection('unavailable');
+        setCanFetch(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -188,12 +193,17 @@ export default function WhoopDashboard() {
     try {
       const result = await refreshSnapshot(period);
       setSnapshots((current) => ({ ...current, [period]: { data: result.snapshot.data, fetchedAt: result.snapshot.fetchedAt } }));
-      setConnection('connected');
+      const status = await getConnectionStatus();
+      setConnection(status.connection);
+      setCanFetch(Boolean(status.canFetch));
       setMessage('');
     } catch (error) {
       setRefreshError(errorText(error));
       if (error.status === 429) setRetryAt(Date.now() + (error.retryAfterSeconds ?? 60) * 1000);
-      if (error.status === 401) setConnection('reconnect_required');
+      if (error.status === 401) {
+        setConnection('reconnect_required');
+        setCanFetch(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -206,6 +216,7 @@ export default function WhoopDashboard() {
       await disconnectWhoop();
       setSnapshots({ morning: null, evening: null });
       setConnection('disconnected');
+      setCanFetch(false);
       setMessage('WHOOP disconnected. Local tokens and cached summaries were cleared.');
       setRefreshError('');
       setRetryAt(0);
@@ -251,7 +262,7 @@ export default function WhoopDashboard() {
         <div className="disclaimer"><span>PERSONAL WELLNESS DATA</span><span>Not medical advice</span></div>
         <div className="actions">
           {connection !== 'connected' && <button className="button button--connect" type="button" onClick={connect} disabled={busy}><ArrowUpRight size={17} />{connection === 'reconnect_required' ? 'Reconnect' : 'Connect WHOOP'}</button>}
-          {connection === 'connected' && <button className="button button--refresh" type="button" onClick={refresh} disabled={busy || retryWait > 0}><RefreshCw size={17} className={busy ? 'spin' : ''} />{busy ? 'Refreshing' : retryWait > 0 ? `Retry in ${retryWait}s` : 'Refresh summary'}</button>}
+          {(connection === 'connected' || canFetch) && <button className="button button--refresh" type="button" onClick={refresh} disabled={busy || retryWait > 0}><RefreshCw size={17} className={busy ? 'spin' : ''} />{busy ? 'Refreshing' : retryWait > 0 ? `Retry in ${retryWait}s` : 'Refresh summary'}</button>}
         </div>
       </footer>
       {(message || refreshError) && <p className={`feedback${refreshError ? ' feedback--error' : ''}`} role="status">{refreshError || message}</p>}
