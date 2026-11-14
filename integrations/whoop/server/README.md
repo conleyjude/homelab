@@ -1,3 +1,3 @@
-# WHOOP server entry point
+# WHOOP server implementation
 
-Server-only WHOOP OAuth and API implementation belongs here. This code may use client credentials and tokens; it must never be imported into the dashboard bundle. No implementation or secrets are present yet.
+Server-only WHOOP v2 OAuth, API client, response mapping, rotating token handling, authenticated token encryption, and in-memory cache code. This directory is imported only by `apps/api/`; never bundle it into the browser. Secrets and runtime data are supplied by the host and are not stored here.

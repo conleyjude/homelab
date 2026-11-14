@@ -1,5 +1,5 @@
 # WHOOP integration
 
-Initial integration for the owner's WHOOP account. Planned data permissions: `read:sleep`, `read:recovery`, `read:body_measurement`, and `read:cycles`. The `offline` scope may be requested during OAuth to seek refresh-token access; availability must be verified.
+Single-user WHOOP v2 OAuth and dashboard integration. The server requests only `read:sleep`, `read:recovery`, `read:body_measurement`, and `read:cycles`, with `offline` requested for optional refresh-token access. It maps minimized response values for the local touchscreen dashboard; it does not fetch profile or workout data.
 
-Keep OAuth and API code under `server/`, display components under `dashboard/`, and any dashboard-facing response shape in a provider-safe contract. See [architecture](../../docs/architecture.md) before implementing storage or caching.
+Server implementation lives in `server/`; UI and its safe local API client live in `dashboard/`. See the root [README](../../README.md) and [architecture](../../docs/architecture.md) for configuration, retention limits, and deployment gates.

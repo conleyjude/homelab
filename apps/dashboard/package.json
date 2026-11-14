@@ -1,0 +1,19 @@
+{
+  "name": "homelab-dashboard-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@fontsource/instrument-serif": "^5.2.6",
+    "@fontsource-variable/manrope": "^5.2.6",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - /etc/homelab/whoop.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4001
+      TOKEN_FILE: /var/lib/homelab/whoop/tokens.enc
+    ports:
+      - "127.0.0.1:4001:4001"
+    volumes:
+      - /var/lib/homelab/whoop:/var/lib/homelab/whoop
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
