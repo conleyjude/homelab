@@ -91,6 +91,7 @@ test('loopback serves the dashboard and assets while rejecting traversal paths',
       assert.equal(page.status, 200);
       assert.equal(page.headers['content-type'], 'text/html; charset=utf-8');
       assert.equal(page.headers['cache-control'], 'no-store');
+      assert.match(page.headers['content-security-policy'], /font-src 'self' data:/);
       assert.match(page.body, /test dashboard/);
 
       const asset = await sendWithHost(base, '/assets/app.js', 'localhost:4001');

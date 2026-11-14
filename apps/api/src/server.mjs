@@ -88,7 +88,7 @@ async function serveDashboardFile(directory, pathname, method, response) {
       'content-type': CONTENT_TYPES.get(extension) ?? 'application/octet-stream',
       'cache-control': relativePath === 'index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
       'x-content-type-options': 'nosniff',
-      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     });
     response.end(method === 'HEAD' ? undefined : body);
   } catch (error) {

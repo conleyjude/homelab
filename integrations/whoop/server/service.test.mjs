@@ -56,7 +56,7 @@ test('OAuth callback rejects invalid state and missing required scopes without s
 
 test('connection state asks to reconnect when WHOOP did not grant a refresh token', async () => {
   const { service, memory } = makeService({ tokens: { accessToken: 'short-lived-access', refreshToken: null, expiresAt: 999999, scopes: scopes.split(' ') } });
-  assert.deepEqual(await service.status(), { connection: 'reconnect_required', canFetch: true, scopes: scopes.split(' ') });
+  assert.deepEqual(await service.status(), { connection: 'reconnect_required', canFetch: true, scopes: scopes.split(' '), timeZone: 'UTC' });
   assert.equal(memory.clears, 0);
 });
 

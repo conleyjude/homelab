@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, ArrowUpRight, CircleHelp, HeartPulse, Moon, RefreshCw, ShieldCheck, Unplug } from 'lucide-react';
 import { disconnectWhoop, getConnectionStatus, getSnapshot, refreshSnapshot, startConnection } from './local-api.js';
-
-function initialPeriod() {
-  return new Date().getHours() < 12 ? 'morning' : 'evening';
-}
+import { formatTimeInZone, hourInTimeZone } from './dashboard-time.mjs';
+import { shouldExpireSnapshot } from './snapshot-expiry.mjs';
 
 function displayNumber(value, suffix = '') {
   return value === null || value === undefined ? '—' : `${value}${suffix}`;
@@ -110,7 +108,8 @@ const errorText = (error) => {
 };
 
 export default function WhoopDashboard() {
-  const [period, setPeriod] = useState(initialPeriod);
+  const [period, setPeriod] = useState('morning');
+  const [timeZone, setTimeZone] = useState('UTC');
   const [connection, setConnection] = useState('loading');
   const [canFetch, setCanFetch] = useState(false);
   const [snapshots, setSnapshots] = useState({ morning: null, evening: null });
@@ -135,6 +134,9 @@ export default function WhoopDashboard() {
     }
     Promise.all([getConnectionStatus(), getSnapshot('morning'), getSnapshot('evening')])
       .then(([status, morning, evening]) => {
+        const configuredTimeZone = status.timeZone ?? 'UTC';
+        setTimeZone(configuredTimeZone);
+        setPeriod(hourInTimeZone(new Date(), configuredTimeZone) < 12 ? 'morning' : 'evening');
         setConnection(status.connection);
         setCanFetch(Boolean(status.canFetch));
         setSnapshots({ morning: morning.snapshot, evening: evening.snapshot });
@@ -160,20 +162,16 @@ export default function WhoopDashboard() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const current = new Date();
-      const today = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
       setSnapshots((existing) => {
         const next = { ...existing };
         for (const [name, snapshot] of Object.entries(existing)) {
-          if (!snapshot?.fetchedAt) continue;
-          const fetched = new Date(snapshot.fetchedAt);
-          const fetchedDay = `${fetched.getFullYear()}-${fetched.getMonth()}-${fetched.getDate()}`;
-          if (fetchedDay !== today || (name === 'morning' && current.getHours() >= 12)) next[name] = null;
+          if (shouldExpireSnapshot(name, snapshot, current, timeZone)) next[name] = null;
         }
         return next;
       });
     }, 30000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [timeZone]);
 
   async function connect() {
     setBusy(true);
@@ -248,7 +246,7 @@ export default function WhoopDashboard() {
     <div className="dashboard-content">
       <div className="intro-row">
         <div><p className="eyebrow">YOUR PERSONAL DASHBOARD</p><h1>Read the day.</h1></div>
-        <div className="freshness"><ShieldCheck size={16} aria-hidden="true" /><span>{activeSnapshot?.fetchedAt ? `Updated ${new Date(activeSnapshot.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'No fresh data'}</span></div>
+        <div className="freshness"><ShieldCheck size={16} aria-hidden="true" /><span>{activeSnapshot?.fetchedAt ? `Updated ${formatTimeInZone(activeSnapshot.fetchedAt, timeZone, { hour: 'numeric', minute: '2-digit' })}` : 'No fresh data'}</span></div>
       </div>
 
       <nav className="period-switch" aria-label="Summary period">

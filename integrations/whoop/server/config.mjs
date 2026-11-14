@@ -21,7 +21,7 @@ export function createConfig(env = process.env) {
     || dashboardUrl.pathname !== '/' || dashboardUrl.search || dashboardUrl.hash) {
     throw new Error('DASHBOARD_ORIGIN must be one exact HTTP(S) origin without path, credentials, query, or fragment');
   }
-  const timeZone = env.PI_TIMEZONE ?? 'UTC';
+  const timeZone = env.PI_TIMEZONE ?? 'America/Chicago';
   try {
     new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
   } catch {
