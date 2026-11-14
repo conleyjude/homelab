@@ -66,11 +66,14 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $repositoryStage 'apps\api') | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $repositoryStage 'deploy\pi') | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $repositoryStage 'apps\dashboard') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $repositoryStage 'integrations\weather') | Out-Null
     Copy-Item -LiteralPath (Join-Path $apiRoot 'Dockerfile') -Destination (Join-Path $repositoryStage 'apps\api\Dockerfile') -Force
     Copy-DirectoryContents -Source (Join-Path $apiRoot 'src') -Destination (Join-Path $repositoryStage 'apps\api\src')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\pi\compose.yaml') -Destination (Join-Path $repositoryStage 'deploy\pi\compose.yaml') -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\pi\setup-kiosk.sh') -Destination (Join-Path $repositoryStage 'deploy\pi\setup-kiosk.sh') -Force
     Copy-DirectoryContents -Source (Join-Path $repoRoot 'integrations\whoop\server') -Destination (Join-Path $repositoryStage 'integrations\whoop\server')
+    Copy-DirectoryContents -Source (Join-Path $repoRoot 'integrations\weather\server') -Destination (Join-Path $repositoryStage 'integrations\weather\server')
+    Copy-DirectoryContents -Source (Join-Path $repoRoot 'integrations\weather\dashboard') -Destination (Join-Path $repositoryStage 'integrations\weather\dashboard')
     foreach ($file in @('package.json', 'package-lock.json', 'index.html', 'vite.config.mjs')) {
         Copy-Item -LiteralPath (Join-Path $repoRoot "apps\dashboard\$file") -Destination (Join-Path $repositoryStage "apps\dashboard\$file") -Force
     }

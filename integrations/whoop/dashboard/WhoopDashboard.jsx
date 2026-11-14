@@ -107,7 +107,7 @@ const errorText = (error) => {
   return 'WHOOP could not be reached. Try again later.';
 };
 
-export default function WhoopDashboard() {
+export default function WhoopDashboard({ persistentContent = null }) {
   const [period, setPeriod] = useState('morning');
   const [timeZone, setTimeZone] = useState('UTC');
   const [connection, setConnection] = useState('loading');
@@ -248,6 +248,8 @@ export default function WhoopDashboard() {
         <div><p className="eyebrow">YOUR PERSONAL DASHBOARD</p><h1>Read the day.</h1></div>
         <div className="freshness"><ShieldCheck size={16} aria-hidden="true" /><span>{activeSnapshot?.fetchedAt ? `Updated ${formatTimeInZone(activeSnapshot.fetchedAt, timeZone, { hour: 'numeric', minute: '2-digit' })}` : 'No fresh data'}</span></div>
       </div>
+
+      {persistentContent}
 
       <nav className="period-switch" aria-label="Summary period">
         <button type="button" className={period === 'morning' ? 'period-switch__item is-active' : 'period-switch__item'} onClick={() => { setPeriod('morning'); setRefreshError(''); }}><Moon size={17} />Morning</button>

@@ -4,9 +4,10 @@ A single-user WHOOP v2 dashboard for a kiosk browser on the Raspberry Pi touchsc
 
 ## Layout and implementation
 
-- `apps/dashboard/` is a Vite/React dashboard. The WHOOP panel is kept in `integrations/whoop/dashboard/` and consumes only the local API.
-- `apps/api/` is a dependency-free Node.js 22 API that also serves the built dashboard on the Pi's loopback port. It owns OAuth, encrypted token storage, data retrieval, and cleanup.
+- `apps/dashboard/` is a Vite/React dashboard. The WHOOP panel and Open-Meteo weather strip are kept in independent integration directories and consume only the local API.
+- `apps/api/` is a dependency-free Node.js 22 API that also serves the built dashboard on the Pi's loopback port. It owns OAuth, encrypted token storage, WHOOP data retrieval and cleanup, and the local weather route.
 - `integrations/whoop/server/` contains the WHOOP v2 client, OAuth state, data mapping, encrypted token store, and in-memory snapshot cache.
+- `integrations/weather/server/` requests and maps a compact Open-Meteo forecast; `integrations/weather/dashboard/` displays it with a visible provider attribution.
 - `deploy/pi/compose.yaml` runs the API and its dashboard as the only container. Host nginx and cloudflared remain unchanged.
 - `docs/architecture.md` describes data flow, retention, and remaining go-live checks.
 
@@ -29,10 +30,14 @@ $env:WHOOP_CLIENT_SECRET = 'fake-local-client-secret'
 $env:WHOOP_TOKEN_ENCRYPTION_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 $env:TOKEN_FILE = "$PWD/runtime/whoop/tokens.enc"
 $env:DASHBOARD_ORIGIN = 'http://127.0.0.1:5173'
+$env:WEATHER_LATITUDE = '0'
+$env:WEATHER_LONGITUDE = '0'
+$env:WEATHER_LOCATION_LABEL = 'Test location'
+$env:WEATHER_TEMPERATURE_UNIT = 'celsius'
 npm --prefix apps/api start
 ```
 
-Use only fake values locally unless you have completed the real-data go-live checks below. The example key is not secure and must never be used on the Pi. Tests use mocked WHOOP responses and synthetic test values only.
+Replace the example weather coordinates with the fixed home coordinates for a useful forecast. Use only fake WHOOP values locally unless you have completed the real-data go-live checks below. The example key is not secure and must never be used on the Pi. Tests use mocked provider responses and synthetic test values only.
 
 ## Pi configuration
 
@@ -45,9 +50,15 @@ WHOOP_TOKEN_ENCRYPTION_KEY=base64-output-from-openssl-rand-32-bytes
 PI_TIMEZONE=America/Chicago
 DASHBOARD_ORIGIN=http://localhost:4001
 WHOOP_CACHE_MAX_SECONDS=0
+WEATHER_LATITUDE=replace-with-home-latitude
+WEATHER_LONGITUDE=replace-with-home-longitude
+WEATHER_LOCATION_LABEL=Home
+WEATHER_TEMPERATURE_UNIT=celsius
 ```
 
 Generate a unique 32-byte encryption key on the Pi with `openssl rand -base64 32` and enter its output in that file. Do not use the example key. Keep `DASHBOARD_ORIGIN=http://localhost:4001` for the kiosk page served by the API container. Set `PI_TIMEZONE=America/Chicago` for Central Time; this setting controls dashboard display times and snapshot cleanup independently of Ubuntu's system timezone. Keep `WHOOP_CACHE_MAX_SECONDS=0` until the WHOOP developer/data terms and authenticated response cache headers have been reviewed. Zero disables server-side snapshot retention; snapshots are still displayed in the current browser session and are cleared there at the display boundary.
+
+Replace both weather coordinate placeholders with the numeric latitude and longitude for the fixed home location, set a short display label, and choose `celsius` or `fahrenheit`. These values are configuration, not credentials. The existing `PI_TIMEZONE` is sent with the forecast request so daily high/low and precipitation chance follow the Pi's local day. Weather forecasts are cached only in memory for up to 15 minutes, shortened by upstream cache headers; they are never written to disk. The dashboard credits Open-Meteo with a visible link beside the forecast.
 
 The encrypted token file is stored separately at `/var/lib/homelab/whoop/tokens.enc`. The encryption key lives only in the root-readable env file, not in Git, the image, or the token volume. Example setup commands:
 
@@ -106,7 +117,7 @@ The registered OAuth redirect is exactly `https://connect.surviveness.com/oauth/
 
 ## Tests and operational behavior
 
-`npm test` covers state success/failure/replay, callback denial, missing scopes, token encryption and rotation, refresh serialization, WHOOP status/rate-limit mapping, cache expiry, disconnect cleanup including concurrent refresh, and public-host route isolation. `npm run build` makes the production dashboard bundle. WHOOP request bodies and response bodies are never written to logs or returned as errors. Refresh is user-triggered, and a 429 response disables refresh until its advertised retry delay.
+`npm test` covers state success/failure/replay, callback denial, missing scopes, token encryption and rotation, refresh serialization, WHOOP status/rate-limit mapping, weather request/configuration/mapping/cache behavior, disconnect cleanup including concurrent refresh, and public-host route isolation. `npm run build` makes the production dashboard bundle. Provider response bodies are never written to logs or returned as errors. WHOOP refresh is user-triggered, and a 429 response disables refresh until its advertised retry delay. Weather loads on dashboard startup and refreshes only when requested.
 
 WHOOP returns the v2 sleep, recovery, body measurement, and cycle schemas documented in its [official API reference](https://developer.whoop.com/api) and [live OpenAPI document](https://api.prod.whoop.com/developer/doc/openapi.json). The service requests only `read:sleep`, `read:recovery`, `read:body_measurement`, `read:cycles`, plus OAuth's `offline` scope. WHOOP's OAuth guide describes rotating refresh tokens and the need to serialize refreshes: [OAuth 2.0](https://developer.whoop.com/docs/developing/oauth/).
 
