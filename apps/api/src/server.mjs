@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { WhoopError } from '../../../integrations/whoop/server/whoop-client.mjs';
+import { WeatherError } from '../../../integrations/weather/server/open-meteo.mjs';
 
 const PUBLIC_HOST = 'connect.surviveness.com';
 const CALLBACK_PATH = '/oauth/whoop/callback';
@@ -36,6 +37,10 @@ function json(response, status, value, allowedOrigin) {
 }
 
 function publicError(error) {
+  if (error instanceof WeatherError) {
+    const statuses = { provider_timeout: 504, provider_unavailable: 503, provider_request_failed: 502, invalid_provider_response: 502 };
+    return { status: statuses[error.code] ?? 502, body: { error: error.code } };
+  }
   if (!(error instanceof WhoopError)) return { status: 500, body: { error: 'internal_error' } };
   const statuses = {
     reconnect_required: 401,
@@ -97,7 +102,7 @@ async function serveDashboardFile(directory, pathname, method, response) {
   }
 }
 
-export function createApiServer({ service, config, dashboardDirectory }) {
+export function createApiServer({ service, weatherService, config, dashboardDirectory }) {
   return createServer(async (request, response) => {
     const host = requestHost(request);
     const url = new URL(request.url ?? '/', 'http://localhost');
@@ -154,6 +159,13 @@ export function createApiServer({ service, config, dashboardDirectory }) {
         const period = url.searchParams.get('period');
         if (!['morning', 'evening'].includes(period)) return json(response, 400, { error: 'invalid_period' }, allowedOrigin);
         json(response, 200, { period, snapshot: service.snapshot(period) }, allowedOrigin);
+        return;
+      }
+      if (request.method === 'GET' && url.pathname === '/api/weather/snapshot') {
+        if (origin && !allowedOrigin) return json(response, 403, { error: 'origin_not_allowed' });
+        if (!weatherService) return json(response, 503, { error: 'weather_unavailable' }, allowedOrigin);
+        const snapshot = await weatherService.snapshot({ refresh: url.searchParams.get('refresh') === '1' });
+        json(response, 200, { snapshot }, allowedOrigin);
         return;
       }
       if (request.method === 'POST' && url.pathname.startsWith('/api/whoop/')) {

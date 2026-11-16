@@ -2,9 +2,7 @@
 
 ## Status and scope
 
-The first implementation is a single-user, local-first WHOOP dashboard hosted on the Raspberry Pi. It displays sleep, recovery, body measurements, and cycle summaries for the owner's WHOOP account. It is not a public health-data service and is not intended to provide medical diagnosis, treatment, or advice.
-
-Weather, Oura, and microcontroller sensors are possible later integrations, not part of the initial WHOOP implementation.
+The dashboard is a single-user, local-first display hosted on the Raspberry Pi. It keeps WHOOP morning and evening views and adds a compact Open-Meteo weather summary for the fixed home location. It is not a public health-data service and is not intended to provide medical diagnosis, treatment, or advice.
 
 ## Component boundaries
 
@@ -14,7 +12,8 @@ Touchscreen physically connected to the Raspberry Pi
   -> dashboard app
   -> local API on the Pi over loopback
        -> WHOOP integration (OAuth and API calls)
-       -> local token and temporary snapshot storage
+      -> weather integration (Open-Meteo Forecast API)
+      -> local token and temporary snapshot storage
 
 WHOOP OAuth redirect
   -> https://connect.surviveness.com/oauth/whoop/callback
@@ -22,10 +21,11 @@ WHOOP OAuth redirect
   -> local API on the Pi (port 4001)
 ```
 
-- `apps/dashboard/` is displayed by a kiosk browser on the Pi's physically attached touchscreen. It composes dashboard widgets and reads data from the local API over loopback. It is not a separate networked display client and must not contain OAuth client secrets, access tokens, or refresh tokens.
+- `apps/dashboard/` is displayed by a kiosk browser on the Pi's physically attached touchscreen. It composes independent integration widgets and reads data from the local API over loopback. It is not a separate networked display client and must not contain OAuth client secrets, access tokens, or refresh tokens.
 - `apps/api/` is the single local backend process. It owns callback handling, state validation, token exchange and refresh, local API routes, storage, and any scheduled refresh or cleanup work.
 - `integrations/whoop/server/` owns WHOOP-specific OAuth configuration, HTTP calls, API response mapping, and revocation behavior. Keep it server-only.
 - `integrations/whoop/dashboard/` owns the WHOOP display component and consumes a limited dashboard-facing data contract. It must not call WHOOP directly.
+- `integrations/weather/server/` owns fixed-location configuration, Open-Meteo requests, WMO condition mapping, and a minimized weather response. `integrations/weather/dashboard/` owns the independent weather strip and local API client. Weather does not depend on WHOOP modules or contracts.
 - `packages/dashboard-contracts/` is for shared response shapes only when needed. Avoid normalizing distinct provider scores into misleading interchangeable values.
 - `devices/` and future providers can be added independently without becoming separate running services by default.
 
@@ -57,11 +57,13 @@ WHOOP's API terms and response cache headers govern how long WHOOP data may be c
 
 OAuth tokens are stored as an AES-256-GCM authenticated-encryption envelope with a fresh nonce and atomic replacement under `/var/lib/homelab/whoop/`. The 32-byte key is injected at runtime from `/etc/homelab/whoop.env`, outside the repository, image, and token volume; the env file must be root-only. The client secret is in that same protected host config file. Filesystem permissions alone are not encryption. The current key remains available to root, Docker daemon administrators, and the running container process; host compromise, memory/swap/core dumps, physical access, and backups are residual risks.
 
+Weather requests contain current temperature, apparent temperature, WMO weather code, 10-meter wind speed/direction, today's high/low, and maximum precipitation probability. The server sends fixed `WEATHER_LATITUDE` and `WEATHER_LONGITUDE`, `WEATHER_TEMPERATURE_UNIT`, `WEATHER_WIND_SPEED_UNIT`, and `PI_TIMEZONE`; no geocoder or API key is used. Weather responses stay in process memory for at most 15 minutes, shortened by upstream cache headers, and are never written to disk. The dashboard fetches on load and explicit refresh, shows its last-updated time, and degrades to an unavailable/stale strip without affecting WHOOP. The visible linked attribution reads “Weather data by Open-Meteo.com”; data is CC BY 4.0.
+
 ## Network and access
 
 The dashboard and its health-data API are intended for local access on the home network, not public internet access. The WHOOP OAuth callback is a necessary exception: Cloudflare Tunnel exposes the specific callback hostname and forwards it to the Pi API. Cloudflare is therefore part of the callback/network path and may process request and connection metadata. The callback carries OAuth authorization information; the Pi API makes separate HTTPS requests to WHOOP for health data.
 
-The API checks the request Host before routing. `connect.surviveness.com` is accepted only for `GET /oauth/whoop/callback`; every other public-host request, including dashboard assets and `/healthz`, is denied. Dashboard assets, API, and health routes accept only `localhost` or `127.0.0.1`. State-changing local API routes require the exact configured dashboard Origin. The API has no request logging. Ensure Cloudflare Access does not block the provider callback and verify Cloudflare/Tunnel logs do not retain authorization codes or state query values.
+The API checks the request Host before routing. `connect.surviveness.com` is accepted only for `GET /oauth/whoop/callback`; every other public-host request, including dashboard assets and `/healthz`, is denied. Dashboard assets, API, and health routes accept only `localhost` or `127.0.0.1`. State-changing local API routes require the exact configured dashboard Origin. The weather GET route rejects any supplied Origin that does not match it. Weather routes and dashboard data remain unavailable through the public Host. The API has no request logging. Ensure Cloudflare Access does not block the provider callback and verify Cloudflare/Tunnel logs do not retain authorization codes or state query values.
 
 ## Disconnect and deletion
 
