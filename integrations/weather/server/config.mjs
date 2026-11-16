@@ -23,6 +23,11 @@ export function createWeatherConfig(env = process.env) {
     throw new Error('WEATHER_TEMPERATURE_UNIT must be celsius or fahrenheit');
   }
 
+  const windSpeedUnit = env.WEATHER_WIND_SPEED_UNIT ?? 'mph';
+  if (!['kmh', 'mph', 'ms', 'kn'].includes(windSpeedUnit)) {
+    throw new Error('WEATHER_WIND_SPEED_UNIT must be kmh, mph, ms, or kn');
+  }
+
   const timeZone = env.PI_TIMEZONE ?? DEFAULT_TIME_ZONE;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
@@ -30,5 +35,5 @@ export function createWeatherConfig(env = process.env) {
     throw new Error('PI_TIMEZONE must be a valid IANA timezone');
   }
 
-  return { latitude, longitude, locationLabel, temperatureUnit, timeZone };
+  return { latitude, longitude, locationLabel, temperatureUnit, windSpeedUnit, timeZone };
 }

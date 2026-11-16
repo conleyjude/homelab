@@ -34,6 +34,7 @@ $env:WEATHER_LATITUDE = '0'
 $env:WEATHER_LONGITUDE = '0'
 $env:WEATHER_LOCATION_LABEL = 'Test location'
 $env:WEATHER_TEMPERATURE_UNIT = 'celsius'
+$env:WEATHER_WIND_SPEED_UNIT = 'mph'
 npm --prefix apps/api start
 ```
 
@@ -54,11 +55,12 @@ WEATHER_LATITUDE=replace-with-home-latitude
 WEATHER_LONGITUDE=replace-with-home-longitude
 WEATHER_LOCATION_LABEL=Home
 WEATHER_TEMPERATURE_UNIT=celsius
+WEATHER_WIND_SPEED_UNIT=mph
 ```
 
 Generate a unique 32-byte encryption key on the Pi with `openssl rand -base64 32` and enter its output in that file. Do not use the example key. Keep `DASHBOARD_ORIGIN=http://localhost:4001` for the kiosk page served by the API container. Set `PI_TIMEZONE=America/Chicago` for Central Time; this setting controls dashboard display times and snapshot cleanup independently of Ubuntu's system timezone. Keep `WHOOP_CACHE_MAX_SECONDS=0` until the WHOOP developer/data terms and authenticated response cache headers have been reviewed. Zero disables server-side snapshot retention; snapshots are still displayed in the current browser session and are cleared there at the display boundary.
 
-Replace both weather coordinate placeholders with the numeric latitude and longitude for the fixed home location, set a short display label, and choose `celsius` or `fahrenheit`. These values are configuration, not credentials. The existing `PI_TIMEZONE` is sent with the forecast request so daily high/low and precipitation chance follow the Pi's local day. Weather forecasts are cached only in memory for up to 15 minutes, shortened by upstream cache headers; they are never written to disk. The dashboard credits Open-Meteo with a visible link beside the forecast.
+Replace both weather coordinate placeholders with the numeric latitude and longitude for the fixed home location, set a short display label, and choose `celsius` or `fahrenheit`. Set `WEATHER_WIND_SPEED_UNIT` to `kmh`, `mph`, `ms`, or `kn`; it defaults to `mph` when omitted. These values are configuration, not credentials. The existing `PI_TIMEZONE` is sent with the forecast request so daily high/low and precipitation chance follow the Pi's local day. Weather forecasts are cached only in memory for up to 15 minutes, shortened by upstream cache headers; they are never written to disk. The dashboard credits Open-Meteo with a visible link beside the forecast.
 
 The encrypted token file is stored separately at `/var/lib/homelab/whoop/tokens.enc`. The encryption key lives only in the root-readable env file, not in Git, the image, or the token volume. Example setup commands:
 
@@ -73,7 +75,7 @@ Root and anyone able to inspect the Docker daemon can still access the key or pr
 
 ## Pi build and run
 
-Keep the existing website, nginx configuration, and cloudflared service unchanged. The display is attached directly to the Pi; Chromium kiosk runs locally and opens `http://localhost:4001`, where the API container serves the dashboard and its API. No nginx document root or additional nginx route is needed. The panel resolution is not specified yet; the compact landscape layout is tuned for an assumed 800x480 viewport and remains responsive at narrower or portrait sizes.
+Keep the existing website, nginx configuration, and cloudflared service unchanged. The display is attached directly to the Pi; Chromium kiosk runs locally and opens `http://localhost:4001`, where the API container serves the dashboard and its API. No nginx document root or additional nginx route is needed. The landscape kiosk layout is tuned for an assumed 800x480 viewport, keeps WHOOP and weather in a fixed-height 75/25 split without page scrolling, and stacks the panels on narrower or portrait screens.
 
 From Windows, deploy the current working tree from the repository root with OpenSSH (`ssh`, `scp`) and `tar` available:
 

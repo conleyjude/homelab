@@ -1,6 +1,8 @@
 const FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
 const MAX_CACHE_SECONDS = 900;
 const REQUEST_TIMEOUT_MS = 8000;
+const WIND_SPEED_LABELS = { kmh: 'km/h', mph: 'mph', ms: 'm/s', kn: 'kn' };
+const WIND_DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 export class WeatherError extends Error {
   constructor(code) {
@@ -45,14 +47,20 @@ export function mapWeatherCode(code) {
   return conditions.get(code) ?? ['Conditions unknown', 'cloud'];
 }
 
+export function mapWindDirection(degrees) {
+  if (!Number.isFinite(degrees) || degrees < 0 || degrees > 360) return null;
+  return WIND_DIRECTIONS[Math.round((degrees % 360) / 45) % WIND_DIRECTIONS.length];
+}
+
 export function buildForecastUrl(config) {
   const url = new URL(FORECAST_ENDPOINT);
   url.search = new URLSearchParams({
     latitude: String(config.latitude),
     longitude: String(config.longitude),
-    current: 'temperature_2m,weather_code',
+    current: 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max',
     temperature_unit: config.temperatureUnit,
+    wind_speed_unit: config.windSpeedUnit,
     timezone: config.timeZone,
     forecast_days: '1',
   }).toString();
@@ -74,19 +82,28 @@ export function mapForecast(payload, config, fetchedAt) {
   const low = firstFinite(daily?.temperature_2m_min);
   const precipitationChance = firstFinite(daily?.precipitation_probability_max);
   if (!isRecord(payload) || !isRecord(current) || !isRecord(daily)
-    || !Number.isFinite(current.temperature_2m) || !Number.isInteger(current.weather_code)
+    || !Number.isFinite(current.temperature_2m) || !Number.isFinite(current.apparent_temperature)
+    || !Number.isInteger(current.weather_code) || !Number.isFinite(current.wind_speed_10m) || current.wind_speed_10m < 0
+    || !Number.isFinite(current.wind_direction_10m) || current.wind_direction_10m < 0 || current.wind_direction_10m > 360
     || typeof daily.time?.[0] !== 'string' || high === null || low === null
     || precipitationChance === null || precipitationChance < 0 || precipitationChance > 100) {
     throw new WeatherError('invalid_provider_response');
   }
 
   const [condition, icon] = mapWeatherCode(current.weather_code);
+  const temperatureUnit = config.temperatureUnit === 'fahrenheit' ? '°F' : '°C';
   return {
     location: config.locationLabel,
     timeZone: config.timeZone,
-    current: { temperature: current.temperature_2m, condition, icon },
+    current: { temperature: current.temperature_2m, feelsLike: current.apparent_temperature, condition, icon },
+    wind: {
+      speed: current.wind_speed_10m,
+      speedUnit: WIND_SPEED_LABELS[config.windSpeedUnit],
+      direction: current.wind_direction_10m,
+      directionLabel: mapWindDirection(current.wind_direction_10m),
+    },
     today: { high, low, precipitationChance },
-    temperatureUnit: config.temperatureUnit === 'fahrenheit' ? '°F' : '°C',
+    temperatureUnit,
     fetchedAt,
   };
 }

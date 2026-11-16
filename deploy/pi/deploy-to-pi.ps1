@@ -103,7 +103,7 @@ try {
         'cp -a "$staging/repository/." "$repository/"'
         'cd "$repository"'
         'sudo docker compose -f deploy/pi/compose.yaml up -d --build'
-        'for attempt in $(seq 1 15); do if curl --fail --silent http://127.0.0.1:4001/healthz >/dev/null; then break; fi; if [ "$attempt" -eq 15 ]; then echo "API health check failed" >&2; exit 1; fi; sleep 2; done'
+        'for attempt in $(seq 1 15); do if curl --fail --silent http://127.0.0.1:4001/healthz >/dev/null; then break; fi; if [ "$attempt" -eq 15 ]; then echo "API health check failed; recent API logs follow:" >&2; sudo docker compose -f deploy/pi/compose.yaml logs --tail=80 api >&2 || true; exit 1; fi; sleep 2; done'
         'curl --fail --silent --show-error http://127.0.0.1:4001/healthz'
         'rm -rf -- "$staging" "$archive"'
     ) -join "`n"

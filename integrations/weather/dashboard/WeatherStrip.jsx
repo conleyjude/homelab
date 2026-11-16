@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, RefreshCw, Sun } from 'lucide-react';
+import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, RefreshCw, Sun, Wind } from 'lucide-react';
 import { getWeatherSnapshot } from './local-api.js';
 import './WeatherStrip.css';
 
@@ -76,6 +76,14 @@ export default function WeatherStrip() {
         </div>
       </div>
     </div>
+
+    {snapshot && <div className="weather-strip__feels-like">
+      <span>Feels like</span><strong>{Math.round(snapshot.current.feelsLike)}{snapshot.temperatureUnit}</strong>
+    </div>}
+
+    {snapshot && <div className="weather-strip__wind">
+      <Wind size={16} aria-hidden="true" /><span>Wind <strong>{snapshot.wind.directionLabel}</strong> · {Math.round(snapshot.wind.speed)} {snapshot.wind.speedUnit}</span>
+    </div>}
 
     {snapshot && <div className="weather-strip__today" aria-label="Today's forecast">
       <div><span className="weather-strip__label">HIGH / LOW</span><strong>{Math.round(snapshot.today.high)}° / {Math.round(snapshot.today.low)}°</strong></div>

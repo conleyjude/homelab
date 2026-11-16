@@ -15,17 +15,6 @@ function duration(milliseconds) {
   return `${hours}h ${minutes}m`;
 }
 
-function dateAtOffset(timestamp, offset, options) {
-  if (!timestamp) return '—';
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return '—';
-  const match = typeof offset === 'string' ? /^([+-])(\d{2}):(\d{2})$/.exec(offset) : null;
-  if (!match && offset !== 'Z') return date.toLocaleString([], options);
-  const minutes = offset === 'Z' ? 0 : (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '+' ? 1 : -1);
-  const shifted = new Date(date.getTime() + minutes * 60000);
-  return new Intl.DateTimeFormat([], { ...options, timeZone: 'UTC' }).format(shifted);
-}
-
 function totalSleepMilliseconds(stage) {
   if (!stage) return null;
   const values = [stage.total_light_sleep_time_milli, stage.total_slow_wave_sleep_time_milli, stage.total_rem_sleep_time_milli];
@@ -62,17 +51,14 @@ function Morning({ snapshot }) {
     {!data && <div className="empty-state"><span className="empty-state__mark"><Moon size={23} /></span><div><strong>Morning data is waiting</strong><p>Refresh once WHOOP has finished syncing your sleep.</p></div></div>}
     {data && <>
       <StateNote state={sleep?.state} />
-      <div className="metric-grid">
-        <Metric label="Sleep performance" value={displayNumber(sleep?.values?.sleep_performance_percentage, '%')} detail={sleep?.start ? `Ended ${dateAtOffset(sleep.end, sleep.timezoneOffset, { hour: 'numeric', minute: '2-digit' })} · ${sleep.timezoneOffset ?? 'local time'}` : 'No sleep recorded'} accent />
-        <Metric label="Recovery" value={displayNumber(recovery?.values?.recovery_score, '%')} detail={recovery?.state === 'SCORED' ? 'WHOOP recovery score' : recovery?.state?.replaceAll('_', ' ') ?? 'No recovery yet'} />
-        <Metric label="HRV · RMSSD" value={displayNumber(recovery?.values?.hrv_rmssd_milli, ' ms')} detail="Milliseconds" />
-        <Metric label="Resting heart rate" value={displayNumber(recovery?.values?.resting_heart_rate, ' bpm')} detail="Beats per minute" />
-        <Metric label="Sleep · REM" value={duration(stage?.total_rem_sleep_time_milli)} detail="REM sleep" />
-        <Metric label="Total sleep" value={duration(totalSleepMilliseconds(stage))} detail="Light, deep and REM" />
-        <Metric label="Body mass" value={displayNumber(weight, ' kg')} detail={body?.heightMeter ? `Height ${body.heightMeter} m` : 'Body measurements'} />
-        <Metric label="Max heart rate" value={displayNumber(body?.maxHeartRate, ' bpm')} detail="WHOOP measurement" />
+      <div className="metric-grid metric-grid--morning">
+        <Metric label="Sleep score" value={displayNumber(sleep?.values?.sleep_performance_percentage, '%')} accent />
+        <Metric label="Recovery" value={displayNumber(recovery?.values?.recovery_score, '%')} />
+        <Metric label="Sleep duration" value={duration(totalSleepMilliseconds(stage))} />
+        <Metric label="HRV" value={displayNumber(recovery?.values?.hrv_rmssd_milli, ' ms')} />
+        <Metric label="Resting heart rate" value={displayNumber(recovery?.values?.resting_heart_rate, ' bpm')} />
+        <Metric label="Body mass" value={displayNumber(weight, ' kg')} />
       </div>
-      {!body && <p className="subtle-note">Body measurements are not available yet.</p>}
     </>}
   </section>;
 }
@@ -88,12 +74,9 @@ function Evening({ snapshot }) {
     {cycle && <>
       <StateNote state={cycle.state} />
       <div className="metric-grid metric-grid--evening">
-        <Metric label="Day strain" value={displayNumber(cycle.values?.strain)} detail={cycle.state === 'SCORED' ? 'WHOOP scale · 0 to 21' : cycle.state?.replaceAll('_', ' ') ?? 'No score yet'} accent />
-        <Metric label="Steps" value={displayNumber(cycle.stepCount?.toLocaleString())} detail="This cycle" />
-        <Metric label="Energy" value={displayNumber(cycle.values?.kilojoule, ' kJ')} detail="Kilojoules" />
-        <Metric label="Average heart rate" value={displayNumber(cycle.values?.average_heart_rate, ' bpm')} detail="Across the cycle" />
-        <Metric label="Peak heart rate" value={displayNumber(cycle.values?.max_heart_rate, ' bpm')} detail="Across the cycle" />
-        <Metric label="Cycle time" value={dateAtOffset(cycle.start, cycle.timezoneOffset, { month: 'short', day: 'numeric' })} detail={cycle.timezoneOffset ? `Offset ${cycle.timezoneOffset}` : 'Local cycle date'} />
+        <Metric label="Strain" value={displayNumber(cycle.values?.strain)} accent />
+        <Metric label="Steps" value={displayNumber(cycle.stepCount?.toLocaleString())} />
+        <Metric label="Energy output" value={displayNumber(cycle.values?.kilojoule, ' kJ')} />
       </div>
     </>}
   </section>;
@@ -244,28 +227,29 @@ export default function WhoopDashboard({ persistentContent = null }) {
     </header>
 
     <div className="dashboard-content">
-      <div className="intro-row">
-        <div><p className="eyebrow">YOUR PERSONAL DASHBOARD</p><h1>Read the day.</h1></div>
-        <div className="freshness"><ShieldCheck size={16} aria-hidden="true" /><span>{activeSnapshot?.fetchedAt ? `Updated ${formatTimeInZone(activeSnapshot.fetchedAt, timeZone, { hour: 'numeric', minute: '2-digit' })}` : 'No fresh data'}</span></div>
-      </div>
-
-      {persistentContent}
-
-      <nav className="period-switch" aria-label="Summary period">
-        <button type="button" className={period === 'morning' ? 'period-switch__item is-active' : 'period-switch__item'} onClick={() => { setPeriod('morning'); setRefreshError(''); }}><Moon size={17} />Morning</button>
-        <button type="button" className={period === 'evening' ? 'period-switch__item is-active' : 'period-switch__item'} onClick={() => { setPeriod('evening'); setRefreshError(''); }}><Activity size={17} />Evening</button>
-      </nav>
-
-      {period === 'morning' ? <Morning snapshot={activeSnapshot} /> : <Evening snapshot={activeSnapshot} />}
-
-      <footer className="action-row">
-        <div className="disclaimer"><span>PERSONAL WELLNESS DATA</span><span>Not medical advice</span></div>
-        <div className="actions">
-          {connection !== 'connected' && <button className="button button--connect" type="button" onClick={connect} disabled={busy}><ArrowUpRight size={17} />{connection === 'reconnect_required' ? 'Reconnect' : 'Connect WHOOP'}</button>}
-          {(connection === 'connected' || canFetch) && <button className="button button--refresh" type="button" onClick={refresh} disabled={busy || retryWait > 0}><RefreshCw size={17} className={busy ? 'spin' : ''} />{busy ? 'Refreshing' : retryWait > 0 ? `Retry in ${retryWait}s` : 'Refresh summary'}</button>}
+      <section className="whoop-workspace" aria-label="WHOOP summary">
+        <div className="intro-row">
+          <div><p className="eyebrow">YOUR PERSONAL DASHBOARD</p><h1>Read the day.</h1></div>
+          <div className="freshness"><ShieldCheck size={16} aria-hidden="true" /><span>{activeSnapshot?.fetchedAt ? `Updated ${formatTimeInZone(activeSnapshot.fetchedAt, timeZone, { hour: 'numeric', minute: '2-digit' })}` : 'No fresh data'}</span></div>
         </div>
-      </footer>
-      {(message || refreshError) && <p className={`feedback${refreshError ? ' feedback--error' : ''}`} role="status">{refreshError || message}</p>}
+
+        <nav className="period-switch" aria-label="Summary period">
+          <button type="button" className={period === 'morning' ? 'period-switch__item is-active' : 'period-switch__item'} onClick={() => { setPeriod('morning'); setRefreshError(''); }}><Moon size={17} />Morning</button>
+          <button type="button" className={period === 'evening' ? 'period-switch__item is-active' : 'period-switch__item'} onClick={() => { setPeriod('evening'); setRefreshError(''); }}><Activity size={17} />Evening</button>
+        </nav>
+
+        {period === 'morning' ? <Morning snapshot={activeSnapshot} /> : <Evening snapshot={activeSnapshot} />}
+
+        <footer className="action-row">
+          <div className="disclaimer"><span>PERSONAL WELLNESS DATA</span><span>Not medical advice</span></div>
+          <div className="actions">
+            {connection !== 'connected' && <button className="button button--connect" type="button" onClick={connect} disabled={busy}><ArrowUpRight size={17} />{connection === 'reconnect_required' ? 'Reconnect' : 'Connect WHOOP'}</button>}
+            {(connection === 'connected' || canFetch) && <button className="button button--refresh" type="button" onClick={refresh} disabled={busy || retryWait > 0}><RefreshCw size={17} className={busy ? 'spin' : ''} />{busy ? 'Refreshing' : retryWait > 0 ? `Retry in ${retryWait}s` : 'Refresh summary'}</button>}
+          </div>
+        </footer>
+        {(message || refreshError) && <p className={`feedback${refreshError ? ' feedback--error' : ''}`} role="status">{refreshError || message}</p>}
+      </section>
+      <aside className="weather-workspace" aria-label="Weather summary">{persistentContent}</aside>
     </div>
   </main>;
 }
